@@ -9,7 +9,7 @@ type ViewMode = 'kanban' | 'baguette';
 export function PlanningView() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const [viewMode, setViewMode] = useState<ViewMode>('kanban');
+  const [viewMode, setViewMode] = useState<ViewMode>('baguette');
 
   if (!projectId) {
     return (
@@ -33,17 +33,7 @@ export function PlanningView() {
       <div className="bg-slate-800 border-b border-slate-700 px-6 py-4">
         <div className="flex items-center gap-2">
          
-          <button
-            onClick={() => setViewMode('kanban')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-              viewMode === 'kanban'
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-            }`}
-          >
-            <LayoutGrid className="w-4 h-4" />
-            <span className="font-medium">Kanban</span>
-          </button>
+          
           <button
             onClick={() => setViewMode('baguette')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
@@ -54,6 +44,18 @@ export function PlanningView() {
           >
             <List className="w-4 h-4" />
             <span className="font-medium">Baguette</span>
+          </button>
+
+          <button
+            onClick={() => setViewMode('kanban')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+              viewMode === 'kanban'
+                ? 'bg-blue-600 text-white'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            <LayoutGrid className="w-4 h-4" />
+            <span className="font-medium">Kanban</span>
           </button>
         </div>
       </div>
