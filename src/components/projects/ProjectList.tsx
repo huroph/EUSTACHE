@@ -1,115 +1,145 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
-import { Plus, Film, LogOut } from 'lucide-react';
+import { Plus, Film, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ProjectModal } from './ProjectModal';
 import { ProjectCard } from './ProjectCard';
 import { useAuth } from '../../contexts/AuthContext';
+import { projectService } from '../../api/projects';
+import type { Project, CreateProjectData, UpdateProjectData } from '../../types/project.types';
 import logo from '../../assets/logo.png';
-
-interface Project {
-  id: string;
-  user_id: string;
-  title: string;
-  scenario_file: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  created_at: string;
-  updated_at: string;
-}
 
 export function ProjectList() {
   const { signOut } = useAuth();
+  
+  // États
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  
+  // États de pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [limit] = useState(12); // 12 projets par page
 
   useEffect(() => {
     loadProjects();
-  }, []);
+  }, [currentPage]);
 
+  /**
+   * Charge les projets avec pagination
+   */
   const loadProjects = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Erreur lors du chargement des projets:', error);
-    } else if (data) {
-      setProjects(data);
+    try {
+      console.log('🔄 Chargement des projets...');
+      const data = await projectService.getProjects(currentPage, limit);
+      
+      setProjects(data.projects);
+      setTotal(data.total);
+      setTotalPages(data.totalPages);
+      
+      console.log('✅ Projets chargés:', {
+        count: data.projects.length,
+        total: data.total,
+        page: data.page
+      });
+    } catch (error) {
+      console.error('❌ Erreur lors du chargement des projets:', error);
+      alert(error instanceof Error ? error.message : 'Erreur lors du chargement des projets');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  const createProject = async (projectData: Omit<Project, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { error } = await supabase
-      .from('projects')
-      .insert({
-        ...projectData,
-        user_id: user.id,
-      });
-
-    if (error) {
-      console.error('Erreur lors de la création du projet:', error);
-      alert('Erreur lors de la création du projet');
-    } else {
+  /**
+   * Crée un nouveau projet
+   */
+  const createProject = async (projectData: CreateProjectData) => {
+    try {
+      console.log('➕ Création du projet...');
+      await projectService.createProject(projectData);
+      
+      // Recharger la première page après création
+      setCurrentPage(1);
       await loadProjects();
       setShowModal(false);
+      
+      console.log('✅ Projet créé avec succès');
+    } catch (error) {
+      console.error('❌ Erreur lors de la création du projet:', error);
+      alert(error instanceof Error ? error.message : 'Erreur lors de la création du projet');
     }
   };
 
-  const updateProject = async (projectData: Omit<Project, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
+  /**
+   * Met à jour un projet existant
+   */
+  const updateProject = async (projectData: UpdateProjectData) => {
     if (!editingProject) return;
 
-    const { error } = await supabase
-      .from('projects')
-      .update(projectData)
-      .eq('id', editingProject.id);
-
-    if (error) {
-      console.error('Erreur lors de la modification du projet:', error);
-      alert('Erreur lors de la modification du projet');
-    } else {
+    try {
+      console.log('✏️ Mise à jour du projet...');
+      await projectService.updateProject(editingProject.id, projectData);
       await loadProjects();
       setShowModal(false);
       setEditingProject(null);
+      
+      console.log('✅ Projet mis à jour avec succès');
+    } catch (error) {
+      console.error('❌ Erreur lors de la modification du projet:', error);
+      alert(error instanceof Error ? error.message : 'Erreur lors de la modification du projet');
     }
   };
 
+  /**
+   * Supprime un projet
+   */
   const deleteProject = async (id: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce projet ? Toutes les données associées (séquences, jours de tournage, décors) seront également supprimées.')) {
+    const project = projects.find(p => p.id === id);
+    
+    if (!confirm(`Êtes-vous sûr de vouloir supprimer "${project?.title}" ? Toutes les données associées seront également supprimées.`)) {
       return;
     }
 
-    const { error } = await supabase
-      .from('projects')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      console.error('Erreur lors de la suppression du projet:', error);
-      alert('Erreur lors de la suppression du projet');
-    } else {
-      await loadProjects();
+    try {
+      console.log('🗑️ Suppression du projet...');
+      await projectService.deleteProject(id);
+      
+      // Si on supprime le dernier projet d'une page, revenir à la page précédente
+      if (projects.length === 1 && currentPage > 1) {
+        setCurrentPage(currentPage - 1);
+      } else {
+        await loadProjects();
+      }
+      
+      console.log('✅ Projet supprimé avec succès');
+    } catch (error) {
+      console.error('❌ Erreur lors de la suppression du projet:', error);
+      alert(error instanceof Error ? error.message : 'Erreur lors de la suppression du projet');
     }
   };
 
+  /**
+   * Ouvre le modal d'édition
+   */
   const handleOpenEditModal = (project: Project) => {
     setEditingProject(project);
     setShowModal(true);
   };
 
+  /**
+   * Ferme le modal
+   */
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingProject(null);
   };
 
-  const handleConfirmModal = (projectData: Omit<Project, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
+  /**
+   * Confirme la création/modification
+   */
+  const handleConfirmModal = (projectData: CreateProjectData) => {
     if (editingProject) {
       updateProject(projectData);
     } else {
@@ -117,10 +147,23 @@ export function ProjectList() {
     }
   };
 
-  if (loading) {
+  /**
+   * Navigation pagination
+   */
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  // État de chargement
+  if (loading && projects.length === 0) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-white text-lg">Chargement...</div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <div className="text-white text-lg">Chargement des projets...</div>
+        </div>
       </div>
     );
   }
@@ -131,8 +174,12 @@ export function ProjectList() {
       <header className="bg-slate-800 border-b border-slate-700 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-           {/* logo */}
-           <img src={logo} alt="FilmBoard Logo" className="h-10 w-auto" />
+            <img src={logo} alt="FilmBoard Logo" className="h-10 w-auto" />
+            {total > 0 && (
+              <span className="text-slate-400 text-sm ml-4">
+                {total} projet{total > 1 ? 's' : ''}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -156,6 +203,7 @@ export function ProjectList() {
       {/* Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         {projects.length === 0 ? (
+          // État vide
           <div className="text-center py-16">
             <Film className="w-16 h-16 text-slate-600 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-slate-400 mb-2">
@@ -173,16 +221,109 @@ export function ProjectList() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {projects.map(project => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                onEdit={handleOpenEditModal}
-                onDelete={deleteProject}
-              />
-            ))}
-          </div>
+          <>
+            {/* Grille de projets */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {projects.map(project => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  onEdit={handleOpenEditModal}
+                  onDelete={deleteProject}
+                />
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-8 flex items-center justify-center gap-2">
+                {/* Bouton précédent */}
+                <button
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className={`
+                    p-2 rounded-lg transition-colors
+                    ${currentPage === 1
+                      ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }
+                  `}
+                  aria-label="Page précédente"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+
+                {/* Numéros de page */}
+                <div className="flex items-center gap-2">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+                    // Afficher seulement quelques pages autour de la page actuelle
+                    if (
+                      page === 1 ||
+                      page === totalPages ||
+                      (page >= currentPage - 1 && page <= currentPage + 1)
+                    ) {
+                      return (
+                        <button
+                          key={page}
+                          onClick={() => goToPage(page)}
+                          className={`
+                            min-w-[40px] px-3 py-2 rounded-lg transition-colors
+                            ${page === currentPage
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                            }
+                          `}
+                        >
+                          {page}
+                        </button>
+                      );
+                    } else if (
+                      page === currentPage - 2 ||
+                      page === currentPage + 2
+                    ) {
+                      return (
+                        <span key={page} className="text-slate-500 px-2">
+                          ...
+                        </span>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+
+                {/* Bouton suivant */}
+                <button
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className={`
+                    p-2 rounded-lg transition-colors
+                    ${currentPage === totalPages
+                      ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }
+                  `}
+                  aria-label="Page suivante"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+
+                {/* Info pagination */}
+                <span className="ml-4 text-slate-400 text-sm">
+                  Page {currentPage} sur {totalPages}
+                </span>
+              </div>
+            )}
+
+            {/* Indicateur de chargement lors du changement de page */}
+            {loading && (
+              <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50">
+                <div className="bg-slate-800 rounded-lg p-6 shadow-xl">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-3"></div>
+                  <div className="text-white text-sm">Chargement...</div>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </main>
 

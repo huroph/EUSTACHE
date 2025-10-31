@@ -1,16 +1,6 @@
+import { Film, Edit2, Trash2, Calendar, Crown, Edit, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Edit2, Trash2, FileText } from 'lucide-react';
-
-interface Project {
-  id: string;
-  user_id: string;
-  title: string;
-  scenario_file: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  created_at: string;
-  updated_at: string;
-}
+import type { Project } from '../../types/project.types';
 
 interface ProjectCardProps {
   project: Project;
@@ -21,72 +11,155 @@ interface ProjectCardProps {
 export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
   const navigate = useNavigate();
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString('fr-FR', {
+  /**
+   * Formate la date au format français
+   */
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('fr-FR', {
       day: 'numeric',
-      month: 'short',
-      year: 'numeric',
+      month: 'long',
+      year: 'numeric'
     });
   };
 
-  const handleDelete = () => {
-    if (confirm(`Êtes-vous sûr de vouloir supprimer le projet "${project.title}" ? Toutes les données associées (séquences, jours de tournage, décors) seront également supprimées.`)) {
-      onDelete(project.id);
-    }
+  /**
+   * Obtient le badge de rôle avec l'icône et la couleur appropriée
+   */
+  const getRoleBadge = () => {
+    if (!project.user_role) return null;
+
+    const roleConfig = {
+      owner: {
+        icon: Crown,
+        label: 'Propriétaire',
+        bgColor: 'bg-yellow-500/10',
+        textColor: 'text-yellow-500',
+        borderColor: 'border-yellow-500/20'
+      },
+      editor: {
+        icon: Edit,
+        label: 'Éditeur',
+        bgColor: 'bg-blue-500/10',
+        textColor: 'text-blue-500',
+        borderColor: 'border-blue-500/20'
+      },
+      viewer: {
+        icon: Eye,
+        label: 'Lecteur',
+        bgColor: 'bg-slate-500/10',
+        textColor: 'text-slate-500',
+        borderColor: 'border-slate-500/20'
+      }
+    };
+
+    const config = roleConfig[project.user_role];
+    const Icon = config.icon;
+
+    return (
+      <div
+        className={`
+          inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border
+          ${config.bgColor} ${config.textColor} ${config.borderColor}
+        `}
+      >
+        <Icon className="w-3 h-3" />
+        {config.label}
+      </div>
+    );
   };
 
+  /**
+   * Vérifie si l'utilisateur peut éditer ou supprimer
+   */
+  const canEdit = project.user_role === 'owner' || project.user_role === 'editor';
+  const canDelete = project.user_role === 'owner';
+
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 hover:border-slate-600 transition-colors group justify-between">
-      
-      <div className=" justify-between flex flex-col flex-1 h-full ">
-     <div className="flex items-start justify-between mb-4"> 
-    
-        <h3 className="text-lg font-semibold text-white line-clamp-2">
-          {project.title}
-        </h3>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={() => onEdit(project)}
-            className="p-2 hover:bg-slate-700 rounded text-slate-400 hover:text-blue-400"
-            title="Modifier"
-          >
-            <Edit2 className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleDelete}
-            className="p-2 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400"
-            title="Supprimer"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+    <div className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden hover:border-slate-600 transition-all group">
+      {/* Image de preview ou placeholder */}
+      <div
+        onClick={() => navigate(`/projects/${project.id}`)}
+        className="h-40 bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center cursor-pointer relative overflow-hidden group-hover:from-slate-600 group-hover:to-slate-700 transition-all"
+      >
+        <Film className="w-16 h-16 text-slate-600 group-hover:scale-110 transition-transform" />
+        
+        {/* Badge de rôle en haut à droite */}
+        <div className="absolute top-3 right-3">
+          {getRoleBadge()}
         </div>
       </div>
 
-      {project.scenario_file && (
-        <div className="flex items-center gap-2 text-sm text-slate-400 mb-2"> 
-          <FileText className="w-4 h-4" />
-          <span className="truncate">{project.scenario_file}</span>
-        </div>
-      )}
+      {/* Contenu */}
+      <div className="p-5">
+        {/* Titre */}
+        <h3
+          onClick={() => navigate(`/projects/${project.id}`)}
+          className="text-lg font-semibold text-white mb-2 cursor-pointer hover:text-blue-400 transition-colors line-clamp-1"
+        >
+          {project.title}
+        </h3>
 
-      {(project.start_date || project.end_date) && (
-        <div className="flex items-center gap-2 text-sm text-slate-400 mb-2"> 
+        {/* Fichier scénario */}
+        {project.scenario_file && (
+          <p className="text-sm text-slate-400 mb-3 line-clamp-1">
+            📄 {project.scenario_file}
+          </p>
+        )}
+
+        {/* Date de création */}
+        <div className="flex items-center gap-2 text-sm text-slate-500 mb-4">
           <Calendar className="w-4 h-4" />
-          <span>
-            {formatDate(project.start_date)} → {formatDate(project.end_date)}
-          </span>
+          <span>Créé le {formatDate(project.created_at)}</span>
         </div>
-      )}
 
-      <button
-        onClick={() => navigate(`/projects/${project.id}/planning`)}
-        className="w-full mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-      >
-        Ouvrir le projet
-      </button>
+        {/* Actions */}
+        <div className="flex items-center gap-2 pt-4 border-t border-slate-700">
+          {/* Bouton Ouvrir */}
+          <button
+            onClick={() => navigate(`/projects/${project.id}`)}
+            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+          >
+            Ouvrir
+          </button>
 
+          {/* Bouton Éditer (seulement pour owner et editor) */}
+          {canEdit && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(project);
+              }}
+              className="p-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition-colors"
+              title="Modifier le projet"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Bouton Supprimer (seulement pour owner) */}
+          {canDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(project.id);
+              }}
+              className="p-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-lg transition-colors"
+              title="Supprimer le projet"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Message si viewer only */}
+          {!canEdit && (
+            <div className="flex-1 text-center">
+              <span className="text-xs text-slate-500">
+                Accès en lecture seule
+              </span>
+            </div>
+          )}
         </div>
+      </div>
     </div>
   );
 }

@@ -1,14 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useParams, useNavigate, NavLink } from 'react-router-dom';
 import { ArrowLeft, Calendar, FileText } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { projectService, Project } from '../../api/projects';
 import logo from '../../assets/logo.png';
 
-interface Project {
-  id: string;
-  title: string;
-  scenario_file: string | null;
-}
 
 export function ProjectLayout() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -17,23 +12,20 @@ export function ProjectLayout() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadProject();
-  }, [projectId]);
-
-  const loadProject = async () => {
     if (!projectId) return;
-
-    const { data } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('id', projectId)
-      .single();
-
-    if (data) {
-      setProject(data);
-    }
-    setLoading(false);
-  };
+    setLoading(true);
+    projectService.getProject(projectId)
+      .then((data) => {
+        setProject(data);
+      })
+      .catch((error) => {
+        console.error('Erreur chargement projet:', error);
+        setProject(null);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [projectId]);
 
   if (loading) {
     return (
